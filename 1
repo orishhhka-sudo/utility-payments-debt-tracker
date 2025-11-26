@@ -1,0 +1,239 @@
+L_STR = 60
+L_INT = 12
+L_NUM = 18
+RES_MAX = 1_000_000
+PAY_MAX = 1_000_000
+JES_MAX = 100_000
+MPAY_MAX = 1_000_000.0
+
+class JES:
+    def __init__(self, district: str = "", jes_number: int = 0, residents: int = 0, monthly_payment: float = 0.0, payers: int = 0):
+        self._district = ""
+        self._jes_number = 0
+        self._residents = 0
+        self._monthly_payment = 0.0
+        self._payers = 0
+        if district: self.set_district(district)
+        if jes_number: self.set_jes_number(jes_number)
+        if residents: self.set_residents(residents)
+        if monthly_payment: self.set_monthly_payment(monthly_payment)
+        if payers: self.set_payers(payers)
+
+    @property
+    def district(self): raise AttributeError("district is write-only")
+    @district.setter
+    def district(self, v): self.set_district(v)
+
+    @property
+    def jes_number(self): raise AttributeError("jes_number is write-only")
+    @jes_number.setter
+    def jes_number(self, v): self.set_jes_number(v)
+
+    @property
+    def residents(self): raise AttributeError("residents is write-only")
+    @residents.setter
+    def residents(self, v): self.set_residents(v)
+
+    @property
+    def monthly_payment(self): raise AttributeError("monthly_payment is write-only")
+    @monthly_payment.setter
+    def monthly_payment(self, v): self.set_monthly_payment(v)
+
+    @property
+    def payers(self): raise AttributeError("payers is write-only")
+    @payers.setter
+    def payers(self, v): self.set_payers(v)
+
+    # --- сеттеры с проверками ---
+    def set_district(self, v):
+        if not isinstance(v, str) or not (1 <= len(v.strip()) <= L_STR):
+            raise ValueError("district 1..60")
+        self._district = v.strip()
+
+    def set_jes_number(self, v):
+        if not isinstance(v, int) or v <= 0 or v > JES_MAX:
+            raise ValueError(f"jes_number 1..{JES_MAX}")
+        self._jes_number = v
+
+    def set_residents(self, v):
+        if not isinstance(v, int) or v < 0 or v > RES_MAX:
+            raise ValueError(f"residents 0..{RES_MAX}")
+        self._residents = v
+        if self._payers > self._residents:
+            self._payers = self._residents
+
+    def set_monthly_payment(self, v):
+        try:
+            x = float(v)
+        except Exception:
+            raise ValueError("monthly_payment number")
+        if not (0.0 <= x <= MPAY_MAX):
+            raise ValueError(f"monthly_payment 0..{MPAY_MAX}")
+        self._monthly_payment = x
+
+    def set_payers(self, v):
+        if not isinstance(v, int) or v < 0 or v > PAY_MAX:
+            raise ValueError(f"payers 0..{PAY_MAX}")
+        if v > self._residents:
+            raise ValueError("payers <= residents")
+        self._payers = v
+
+    # --- бизнес-логика ---
+    def total_debt(self) -> float:
+        # формулка: долг = (жильцов - оплативших) * ставка_за_месяц
+        d = self._residents - self._payers
+        if d <= 0: return 0.0
+        return self._monthly_payment * d
+
+    def aging_report(self, p1, p2, p3):
+        s = p1 + p2 + p3
+        if s <= 0: w1 = w2 = w3 = 1/3
+        else: w1, w2, w3 = p1/s, p2/s, p3/s
+        t = self.total_debt()
+        return [t*w1, t*w2, t*w3]
+
+    # вывод без раскрытия write-only свойств наружу
+    def show(self):
+        print("ЖЭС:", self._district, f"(№{self._jes_number})")
+        print(f"Жильцов/Оплатили: {self._residents}/{self._payers}")
+        print(f"Тариф/мес.: {self._monthly_payment:.2f}")
+        print(f"Общая задолженность: {self.total_debt():.2f}")
+
+# ===== валидация строкового ввода =====
+def _udec(s: str) -> bool:
+    return bool(s) and len(s) <= L_INT and s.isdigit()
+
+def _money(s: str) -> bool:
+    if not s or len(s) > L_NUM: return False
+    dots = 0; digs = 0
+    for ch in s:
+        if ch == '.':
+            dots += 1
+            if dots > 1: return False
+        elif ch.isdigit():
+            digs += 1
+        else:
+            return False
+    return digs > 0
+
+# ===== опрос пользователя =====
+def ask_mode() -> int:
+    while True:
+        s = input("Режим: 1 — Авто, 2 — Вручную. Выбор (1/2): ").strip()
+        if s in ("1","2"): return int(s)
+        print("Введите 1 или 2.")
+
+def ask_district() -> str:
+    while True:
+        s = input(f"Район ЖЭС (1..{L_STR}): ").strip()
+        if 1 <= len(s) <= L_STR: return s
+        print("Ошибка: длина 1..60.")
+
+def ask_jes_number() -> int:
+    while True:
+        s = input(f"Номер ЖЭС (целое 1..{JES_MAX}): ").strip()
+        if not _udec(s): print("Ошибка: целое без знака, длина <= 12."); continue
+        v = int(s)
+        if 1 <= v <= JES_MAX: return v
+        print(f"Ошибка: 1..{JES_MAX}.")
+
+def ask_residents() -> int:
+    while True:
+        s = input(f"Число жильцов (целое 0..{RES_MAX}): ").strip()
+        if not _udec(s): print("Ошибка: целое без знака."); continue
+        v = int(s)
+        if 0 <= v <= RES_MAX: return v
+        print(f"Ошибка: 0..{RES_MAX}.")
+
+def ask_payers(maxv: int) -> int:
+    while True:
+        s = input(f"Оплативших (целое 0..{maxv}): ").strip()
+        if not _udec(s): print("Ошибка: целое без знака."); continue
+        v = int(s)
+        if 0 <= v <= maxv: return v
+        print("Ошибка: в пределах числа жильцов.")
+
+def ask_monthly_payment() -> float:
+    while True:
+        s = input(f"Оплата за месяц (на 1 жильца), 0..{int(MPAY_MAX)} (напр. 17.5): ").strip()
+        if not _money(s): print("Ошибка: цифры и не более одной точки, длина <= 18."); continue
+        x = float(s)
+        if 0.0 <= x <= MPAY_MAX: return x
+        print(f"Ошибка: диапазон 0..{int(MPAY_MAX)}.")
+
+def ask_yn(msg: str) -> bool:
+    while True:
+        s = input(f"{msg} (y/n): ").strip().lower()
+        if s in ("y","n"): return s == "y"
+        print("Введите y или n.")
+
+def run(mode="ask"):
+    if mode == "ask":
+        m = ask_mode()
+    elif mode in (1,2):
+        m = mode
+    else:
+        m = 2
+
+    if m == 1:
+        j = JES("Советский район", 12, 750, 18.50, 690)
+        print("Режим: Авто (данные из кода).")
+    else:
+        print("Режим: Вручную.")
+        d = ask_district()
+        num = ask_jes_number()
+        res = ask_residents()
+        pay = ask_monthly_payment()
+        pyr = ask_payers(res)
+        j = JES(d, num, res, pay, pyr)
+
+    print("\n--- Состояние ---")
+    j.show()
+
+    if ask_yn("\nИзменить данные сейчас?"):
+        print("1 — Район, 2 — №ЖЭС, 3 — Жильцы, 4 — Оплата/мес (на 1), 5 — Оплатившие")
+        k = input("Ваш выбор: ").strip()
+        try:
+            if k == "1": j.district = ask_district()
+            elif k == "2": j.jes_number = ask_jes_number()
+            elif k == "3":
+                res2 = ask_residents()
+                j.residents = res2
+            elif k == "4": j.monthly_payment = ask_monthly_payment()
+            elif k == "5": j.payers = ask_payers(j._residents)
+        except Exception as e:
+            print("Ошибка:", e)
+
+        print("\n--- После изменений ---")
+        j.show()
+
+    print("\nАналитика долгов (разбивка по интервалам просрочки):")
+    print("Введите веса интервалов (например: 1 2 3) — суммарная доля нормируется:")
+    try:
+        p = input("W1 W2 W3: ").split()
+        p1 = float(p[0]) if len(p)>0 else 1.0
+        p2 = float(p[1]) if len(p)>1 else 1.0
+        p3 = float(p[2]) if len(p)>2 else 1.0
+    except:
+        p1 = p2 = p3 = 1.0
+    b1, b2, b3 = j.aging_report(p1, p2, p3)
+    print(f"Долг 0–30:  {b1:.2f}")
+    print(f"Долг 31–60: {b2:.2f}")
+    print(f"Долг 61+:   {b3:.2f}")
+
+    print("\nАвто-демо:")
+    try:
+        j.district = "Демо: Центральный"
+        j.jes_number = min(j._jes_number + 1, JES_MAX)
+        j.residents = min(j._residents + 25, RES_MAX)
+        j.payers = min(j._payers + 20, j._residents)
+        j.monthly_payment = min(j._monthly_payment + 1.0, MPAY_MAX)
+    except Exception as e:
+        print("Демо-изменение пропущено:", e)
+
+    print("\n--- После авто-демо ---")
+    j.show()
+
+if __name__ == "__main__":
+    print("=== Вариант 3: ЖЭС ===")
+    run("ask")
